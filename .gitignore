@@ -1,0 +1,22 @@
+# 敏感文件
+server/.env
+.env
+
+# Python
+server/venv/
+__pycache__/
+*.pyc
+
+# 数据文件
+server/data/memory/
+*.db
+
+# Node
+web/node_modules/
+web/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
