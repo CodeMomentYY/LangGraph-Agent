@@ -81,13 +81,14 @@ def _to_langchain_message(openai_msg, raw_dict: dict) -> AIMessage:
     )
 
 
-def invoke_llm(messages: list[BaseMessage], tools: list = None) -> AIMessage:
+def invoke_llm(messages: list[BaseMessage], tools: list = None, temperature: float = 0) -> AIMessage:
     """
     调用 MiMo LLM，正确处理 reasoning_content。
 
     参数：
         messages: LangChain 格式的消息列表
         tools: 工具定义列表（OpenAI 格式的 JSON Schema）
+        temperature: 生成温度，默认 0（精确），写作类可设 0.5
 
     返回：
         LangChain AIMessage（包含 tool_calls 和 reasoning_content）
@@ -102,7 +103,7 @@ def invoke_llm(messages: list[BaseMessage], tools: list = None) -> AIMessage:
     kwargs = {
         "model": settings.llm_model,
         "messages": openai_messages,
-        "temperature": 0,
+        "temperature": temperature,
     }
     if tools:
         kwargs["tools"] = tools

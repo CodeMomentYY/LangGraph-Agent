@@ -1,5 +1,8 @@
 """
-Agent 状态定义（Phase 3+：加入 reflection 计数器）
+Agent 状态定义（多 Agent 架构 - 支持多意图串行）
+
+intent 改为列表：dispatcher 可返回多个意图，按顺序执行。
+current_step 追踪当前执行到第几个意图。
 """
 
 from typing import Annotated, Sequence
@@ -18,5 +21,14 @@ class AgentState(TypedDict):
     user_id: str
     session_id: str
 
-    # Reflection 计数器（防止无限循环）
+    # 意图列表（dispatcher 填写，支持多意图串行/并行）
+    intents: list[str]
+
+    # 执行模式：sequential（串行，有依赖）或 parallel（并行，无依赖）
+    mode: str
+
+    # 当前执行到第几个意图（0-indexed，仅串行模式使用）
+    current_step: int
+
+    # Reflection 计数器（保留兼容）
     reflect_count: int

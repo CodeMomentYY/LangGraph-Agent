@@ -35,6 +35,9 @@ async def chat(request: ChatRequest):
         "messages": all_messages,
         "user_id": request.user_id,
         "session_id": session_id,
+        "intents": [],
+        "mode": "sequential",
+        "current_step": 0,
         "reflect_count": 0,
     }
 
