@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ElABubble, ElABubbleList, ElAThinking } from 'element-ai-vue'
+import { useTemplateRef } from 'vue'
 
 export interface Message {
   id: number
@@ -14,11 +15,19 @@ export interface Message {
 defineProps<{
   messages: Message[]
 }>()
+
+const bubbleListRef = useTemplateRef('bubbleListRef')
+
+function scrollToBottom() {
+  bubbleListRef.value?.scrollToBottom()
+}
+
+defineExpose({ scrollToBottom })
 </script>
 
 <template>
   <div class="message-list">
-    <ElABubbleList>
+    <ElABubbleList ref="bubbleListRef">
       <ElABubble
         v-for="msg in messages"
         :key="msg.id"
@@ -52,8 +61,18 @@ defineProps<{
 .message-list {
   max-width: 780px;
   width: 100%;
+  height: 100%;
   margin: 0 auto;
   padding: 20px 0;
+}
+
+:deep(.el-ai-bubble-list) {
+  height: 100%;
+  padding-right: 12px;
+}
+
+:deep(.el-ai-bubble-list__content) {
+  padding-right: 8px;
 }
 
 :deep(.el-ai-bubble) {

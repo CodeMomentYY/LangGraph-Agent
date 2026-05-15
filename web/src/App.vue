@@ -3,8 +3,9 @@
  * App.vue —— 只负责布局编排和全局状态
  * 具体 UI 全部委托给子组件
  */
-import { ref, watch } from 'vue'
+import { ref, watch, computed, nextTick, useTemplateRef } from 'vue'
 import { useDark, useToggle } from '@vueuse/core'
+import { ElAConfigProvider } from 'element-ai-vue'
 import Sidebar from './components/Sidebar.vue'
 import EmptyState from './components/EmptyState.vue'
 import MessageList from './components/MessageList.vue'
@@ -17,11 +18,17 @@ import type { Message } from './components/MessageList.vue'
 const isDark = useDark()
 const toggleDark = useToggle(isDark)
 
+// element-ai-vue 的 theme 值：跟随 isDark
+const aiTheme = computed(() => isDark.value ? 'dark' : 'light')
+
 // 会话状态
 const sessions = ref<Session[]>([])
 const currentSessionId = ref(`sess-${Date.now().toString(36)}`)
 const messages = ref<Message[]>([])
 const loading = ref(false)
+
+// MessageList 引用，用于主动滚动
+const messageListRef = useTemplateRef('messageListRef')
 
 // 请求中断控制器
 let abortController: AbortController | null = null
@@ -84,6 +91,11 @@ async function handleSend(text: string) {
   const loadingId = Date.now() + 1
   messages.value.push({ id: loadingId, placement: 'start', content: '', loading: true })
 
+  // 发送新消息后滚动到底部
+  nextTick(() => {
+    messageListRef.value?.scrollToBottom()
+  })
+
   loading.value = true
   abortController = new AbortController()
   try {
@@ -123,37 +135,39 @@ async function handleSend(text: string) {
 </script>
 
 <template>
-  <div class="app-layout">
-    <!-- 左侧边栏 -->
-    <Sidebar
-      :sessions="sessions"
-      :current-id="currentSessionId"
-      :is-dark="isDark"
-      @new-session="handleNewSession"
-      @switch-session="handleSwitchSession"
-      @toggle-theme="toggleDark()"
-    />
-
-    <!-- 右侧主区域 -->
-    <main class="main-area">
-      <!-- 无对话：标题 + 输入框居中 -->
-      <EmptyState
-        v-if="!hasMessages"
-        v-model:loading="loading"
-        @send="handleSend"
+  <ElAConfigProvider :theme="aiTheme">
+    <div class="app-layout">
+      <!-- 左侧边栏 -->
+      <Sidebar
+        :sessions="sessions"
+        :current-id="currentSessionId"
+        :is-dark="isDark"
+        @new-session="handleNewSession"
+        @switch-session="handleSwitchSession"
+        @toggle-theme="toggleDark()"
       />
 
-      <!-- 有对话：消息列表 + 底部固定输入框 -->
-      <template v-else>
-        <div class="chat-scroll">
-          <MessageList :messages="messages" />
-        </div>
-        <div class="chat-footer">
-          <ChatInput v-model:loading="loading" @send="handleSend" />
-        </div>
-      </template>
-    </main>
-  </div>
+      <!-- 右侧主区域 -->
+      <main class="main-area">
+        <!-- 无对话：标题 + 输入框居中 -->
+        <EmptyState
+          v-if="!hasMessages"
+          v-model:loading="loading"
+          @send="handleSend"
+        />
+
+        <!-- 有对话：消息列表 + 底部固定输入框 -->
+        <template v-else>
+          <div class="chat-scroll">
+            <MessageList ref="messageListRef" :messages="messages" />
+          </div>
+          <div class="chat-footer">
+            <ChatInput v-model:loading="loading" @send="handleSend" />
+          </div>
+        </template>
+      </main>
+    </div>
+  </ElAConfigProvider>
 </template>
 
 <style scoped>
@@ -173,8 +187,9 @@ async function handleSend(text: string) {
 
 .chat-scroll {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 0 40px;
+  padding-right: 16px;
 }
 
 .chat-footer {
