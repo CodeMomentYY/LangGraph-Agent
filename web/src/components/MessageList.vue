@@ -1,16 +1,10 @@
 <script setup lang="ts">
-import { ElABubble, ElABubbleList, ElAThinking } from 'element-ai-vue'
-import { useTemplateRef } from 'vue'
+import { ElABubble, ElABubbleList, ElAThinking, ElAMarkdown } from 'element-ai-vue'
+import { useTemplateRef, computed } from 'vue'
+import { useDark } from '@vueuse/core'
+import type { ThinkingStep, Message } from '../types/chat'
 
-export interface Message {
-  id: number
-  placement: 'start' | 'end'
-  content: string
-  loading?: boolean
-  typing?: boolean
-  thinking?: string[]  // 思考过程列表
-  tools?: string[]
-}
+const isDark = useDark()
 
 defineProps<{
   messages: Message[]
@@ -22,37 +16,67 @@ function scrollToBottom() {
   bubbleListRef.value?.scrollToBottom()
 }
 
+function formatThinkingMarkdown(steps: ThinkingStep[]): string {
+  return steps.map(step => {
+    if (step.description) {
+      return `**${step.title}**\n\n${step.description}`
+    }
+    return step.title
+  }).join('\n\n')
+}
+
 defineExpose({ scrollToBottom })
 </script>
 
 <template>
   <div class="message-list">
     <ElABubbleList ref="bubbleListRef">
-      <ElABubble
-        v-for="msg in messages"
-        :key="msg.id"
-        :placement="msg.placement"
-        :content="msg.loading ? '' : msg.content"
-        :loading="msg.loading"
-        :typing="msg.placement === 'start' && !msg.loading && !!msg.content"
-        :typing-over="true"
-        :is-markdown="msg.placement === 'start' && !msg.loading"
-        :variant="msg.placement === 'start' ? 'borderless' : 'filled'"
-      >
-        <!-- 思考过程（显示在回复内容上方） -->
-        <template #header v-if="msg.thinking && msg.thinking.length">
-          <ElAThinking title="思考过程">
-            <div class="thinking-content">
-              <div v-for="(step, i) in msg.thinking" :key="i" class="thinking-step">
-                {{ step }}
-              </div>
-            </div>
-          </ElAThinking>
-        </template>
-        <template #footer v-if="msg.tools && msg.tools.length">
-          <span class="tools-tag">🔧 {{ msg.tools.join(', ') }}</span>
-        </template>
-      </ElABubble>
+      <template v-for="msg in messages" :key="msg.id">
+        <!-- 用户消息 -->
+        <ElABubble
+          v-if="msg.placement === 'end'"
+          placement="end"
+          :content="msg.content"
+          variant="filled"
+        />
+
+        <!-- AI 消息 -->
+        <div v-else class="ai-message">
+          <!-- Loading 状态 -->
+          <ElABubble
+            v-if="msg.loading && !msg.streaming"
+            placement="start"
+            content=""
+            :loading="true"
+            variant="borderless"
+          />
+
+          <!-- Streaming + 最终回复 -->
+          <template v-else>
+            <!-- 思考过程（Thinking 面板） -->
+            <ElAThinking
+              v-if="msg.thinking && msg.thinking.length"
+              v-model="msg.thinkingExpanded"
+              :title="msg.streaming ? '正在思考...' : `已完成思考（${msg.thinking.length} 步）`"
+            >
+              <ElAMarkdown
+                :content="formatThinkingMarkdown(msg.thinking)"
+                :theme="isDark ? 'dark' : 'light'"
+              />
+            </ElAThinking>
+
+            <!-- 最终回复内容 -->
+            <ElABubble
+              v-if="msg.content"
+              placement="start"
+              :content="msg.content"
+              :typing="true"
+              :is-markdown="true"
+              variant="borderless"
+            />
+          </template>
+        </div>
+      </template>
     </ElABubbleList>
   </div>
 </template>
@@ -71,23 +95,25 @@ defineExpose({ scrollToBottom })
   padding-right: 12px;
 }
 
+:deep(.el-ai-bubble-list > button),
+:deep(.el-ai-bubble-list [class*="back"]) {
+  display: none !important;
+}
+
+:deep(.el-ai-bubble-list-bottom-action__inner) {
+  display: none !important;
+}
+
 :deep(.el-ai-bubble-list__content) {
   padding-right: 8px;
 }
 
-:deep(.el-ai-bubble) {
+.ai-message {
   margin-bottom: 24px;
 }
 
-.thinking-content {
-  padding: 4px 12px 8px;
-  font-size: 13px;
-  color: var(--el-text-color-secondary, #909399);
-  line-height: 1.6;
-}
-
-.thinking-step {
-  padding: 2px 0;
+.ai-message :deep(.el-ai-thinking) {
+  margin: 16px 0 8px;
 }
 
 .tools-tag {

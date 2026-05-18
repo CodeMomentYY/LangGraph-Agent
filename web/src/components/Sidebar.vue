@@ -4,11 +4,7 @@
  * 职责：品牌展示、新建对话、会话列表、日夜切换
  */
 import { Sunny, Moon } from '@element-plus/icons-vue'
-
-export interface Session {
-  id: string
-  title: string
-}
+import type { Session } from '../types/chat'
 
 defineProps<{
   sessions: Session[]
