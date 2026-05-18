@@ -59,6 +59,9 @@ class MomentYYBotHandler(dingtalk_stream.ChatbotHandler):
                 "messages": all_messages,
                 "user_id": user_id,
                 "session_id": session_id,
+                "intents": [],
+                "mode": "sequential",
+                "current_step": 0,
                 "reflect_count": 0,
             }
             final_state = agent_app.invoke(initial_state)
