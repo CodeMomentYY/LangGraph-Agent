@@ -40,10 +40,14 @@ def tool_executor_node(state: AgentState) -> dict:
         # 找到对应的工具函数并执行
         tool_fn = TOOL_MAP.get(tool_name)
         if tool_fn:
-            # MCP 工具是异步的，需要用 asyncio.run 调用
+            # MCP 工具是异步的，需要在新线程中运行避免事件循环冲突
             if hasattr(tool_fn, 'coroutine') and tool_fn.coroutine:
                 import asyncio
-                result = asyncio.run(tool_fn.ainvoke(tool_args))
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(1) as executor:
+                    result = executor.submit(
+                        asyncio.run, tool_fn.ainvoke(tool_args)
+                    ).result()
             else:
                 result = tool_fn.invoke(tool_args)
         else:
