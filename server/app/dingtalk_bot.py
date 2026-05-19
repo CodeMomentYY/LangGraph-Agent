@@ -47,13 +47,29 @@ class MomentYYBotHandler(dingtalk_stream.ChatbotHandler):
 
         user_id = incoming_message.sender_id
         text = incoming_message.text.content.strip()
-        session_id = f"dingtalk-{user_id}"
 
-        logger.info(f"收到消息 [{user_id}]: {text}")
+        # 群聊：用 conversation_id 作为 session（同一个群共享记忆）
+        # 私聊（conversation_type == '1'）：用用户 ID 作为 session
+        conversation_type = incoming_message.conversation_type
+        conversation_id = incoming_message.conversation_id
+        is_group = (conversation_type == '2')
+
+        if is_group:
+            session_id = f"dingtalk-group-{conversation_id}"
+        else:
+            session_id = f"dingtalk-{user_id}"
+
+        # 获取发送人昵称
+        sender_nick = incoming_message.sender_nick or user_id
+
+        logger.info(f"收到消息 [{sender_nick}] ({'群聊' if is_group else '私聊'}): {text}")
 
         try:
             history = load_history(session_id)
-            all_messages = history + [HumanMessage(content=text)]
+
+            # 群聊消息带上发送人标识，让 Agent 知道是谁在说话
+            user_msg = f"[{sender_nick}]: {text}" if is_group else text
+            all_messages = history + [HumanMessage(content=user_msg)]
 
             initial_state = {
                 "messages": all_messages,
@@ -80,8 +96,8 @@ class MomentYYBotHandler(dingtalk_stream.ChatbotHandler):
             if not reply:
                 reply = "抱歉，我暂时无法回答这个问题。"
 
-            # 保存历史
-            history.append(HumanMessage(content=text))
+            # 保存历史（群聊带发送人标识）
+            history.append(HumanMessage(content=user_msg))
             history.append(AIMessage(content=reply))
             save_history(session_id, history)
 
