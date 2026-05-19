@@ -30,12 +30,12 @@ def _fetch_yuque_doc(url: str) -> str:
     group, book, doc_slug = match.groups()
     namespace = f"{group}/{book}"
 
-    # 调用语雀 API
+    # 调用语雀 API（强制不走代理）
     api_url = f"{base_url}/repos/{namespace}/docs/{doc_slug}"
     headers = {"X-Auth-Token": token}
 
     try:
-        resp = requests.get(api_url, headers=headers, timeout=15)
+        resp = requests.get(api_url, headers=headers, timeout=15, proxies={"http": None, "https": None})
         resp.raise_for_status()
         data = resp.json()
 

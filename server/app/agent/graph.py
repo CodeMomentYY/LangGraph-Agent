@@ -76,7 +76,7 @@ def advance_step(state: AgentState) -> dict:
 
 def _execute_single_intent(intent: str, state: AgentState) -> str:
     """执行单个意图，返回文本结果"""
-    if intent == "weather":
+    if intent == "tools":
         # ReAct 循环（最多 5 轮）
         current_messages = list(state["messages"])
         result = router_node({**state, "messages": current_messages})
@@ -177,7 +177,7 @@ def build_graph():
         "step_router",
         route_current_step,
         {
-            "weather": "router",
+            "tools": "router",
             "writer": "writer_agent",
             "chat": "chat_agent",
             "done": END,

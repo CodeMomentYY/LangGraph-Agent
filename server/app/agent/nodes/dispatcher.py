@@ -19,8 +19,8 @@ from app.agent.llm import invoke_llm
 DISPATCHER_PROMPT = """你是一个意图分类器。根据用户的最新消息，判断应该交给哪些专业助手处理。
 
 分类规则：
-- weather：涉及天气、温度、出行、景点、推荐去哪玩、适不适合出门、需要获取网页内容（包含URL链接）、需要调用工具获取实时信息
-- writer：涉及写作、写邮件、写周报、写文案、翻译、润色、总结文章
+- tools：需要调用工具获取信息的请求，包括：查天气、查网页内容、获取文档、搜索语雀、包含URL链接、需要实时数据
+- writer：涉及写作、写邮件、写周报、写文案、翻译、润色、总结文章（注意：如果是"查看/获取"某个链接内容，不是 writer，是 tools）
 - chat：其他所有情况（闲聊、知识问答、自我介绍、计算等）
 
 执行模式判断：
@@ -31,8 +31,12 @@ DISPATCHER_PROMPT = """你是一个意图分类器。根据用户的最新消息
 意图1,意图2|模式
 
 示例：
-- "上海天气怎么样" → weather|sequential
+- "上海天气怎么样" → tools|sequential
 - "帮我写封邮件" → writer|sequential
+- "你好" → chat|sequential
+- "帮我看看这个文档 https://xxx.com/doc" → tools|sequential
+- "查一下北京天气，写个朋友圈" → tools,writer|sequential
+- "帮我翻译hello，顺便查一下上海天气" → tools,writer|parallel
 - "你好" → chat|sequential
 - "查一下北京天气，写个朋友圈" → weather,writer|sequential
 - "帮我翻译hello，顺便查一下上海天气" → weather,writer|parallel
@@ -74,7 +78,7 @@ def dispatcher_node(state: AgentState) -> dict:
             mode = mode_raw
 
     # 解析多意图：按逗号分割
-    valid_intents = {"weather", "writer", "chat"}
+    valid_intents = {"tools", "writer", "chat"}
     intents = [i.strip() for i in intent_part.split(",") if i.strip() in valid_intents]
 
     # 兜底
