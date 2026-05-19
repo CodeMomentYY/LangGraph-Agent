@@ -86,6 +86,9 @@ class MomentYYBotHandler(dingtalk_stream.ChatbotHandler):
             reply = ""
             for msg in reversed(final_state["messages"]):
                 if hasattr(msg, "content") and msg.content:
+                    # 跳过用户消息
+                    if hasattr(msg, "type") and msg.type == "human":
+                        continue
                     if "<tool_call>" in msg.content or "<function=" in msg.content:
                         continue
                     if hasattr(msg, "tool_calls") and msg.tool_calls:
