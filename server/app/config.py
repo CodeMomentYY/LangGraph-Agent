@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     dingtalk_client_id: str = ""
     dingtalk_client_secret: str = ""
 
+    # 语雀配置
+    yuque_api_token: str = ""
+    yuque_base_url: str = "https://www.yuque.com/api/v2"
+    dingtalk_client_secret: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

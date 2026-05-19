@@ -110,6 +110,7 @@ defineExpose({ scrollToBottom })
 
 .ai-message {
   margin-bottom: 24px;
+  margin-top: 16px;
 }
 
 .ai-message :deep(.el-ai-thinking) {
