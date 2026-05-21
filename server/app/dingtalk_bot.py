@@ -10,7 +10,11 @@ Stream 模式的优势：
   python -m app.dingtalk_bot
 """
 
+import asyncio
 import logging
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+
 from langchain_core.messages import HumanMessage, AIMessage
 
 import dingtalk_stream
@@ -24,6 +28,9 @@ from app.memory.conversation import load_history, save_history
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# 线程池：用于在线程中执行同步的 agent_app.invoke()
+_executor = ThreadPoolExecutor(max_workers=4)
+
 
 class MomentYYBotHandler(dingtalk_stream.ChatbotHandler):
     """
@@ -32,24 +39,26 @@ class MomentYYBotHandler(dingtalk_stream.ChatbotHandler):
 
     def __init__(self):
         super().__init__()
-        self._processed_ids = set()  # 去重：记录已处理的消息 ID
+        self._processed_ids = set()
+        self._dedup_lock = asyncio.Lock()
+        # 每个 session 一把锁，保证同一 session 内消息串行处理
+        self._session_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     async def process(self, callback: dingtalk_stream.CallbackMessage):
         incoming_message = ChatbotMessage.from_dict(callback.data)
 
         # 去重
         msg_id = incoming_message.message_id
-        if msg_id in self._processed_ids:
-            return AckMessage.STATUS_OK, "OK"
-        self._processed_ids.add(msg_id)
-        if len(self._processed_ids) > 200:
-            self._processed_ids = set(list(self._processed_ids)[-100:])
+        async with self._dedup_lock:
+            if msg_id in self._processed_ids:
+                return AckMessage.STATUS_OK, "OK"
+            self._processed_ids.add(msg_id)
+            if len(self._processed_ids) > 200:
+                self._processed_ids = set(list(self._processed_ids)[-100:])
 
         user_id = incoming_message.sender_id
         text = incoming_message.text.content.strip()
 
-        # 群聊：用 conversation_id 作为 session（同一个群共享记忆）
-        # 私聊（conversation_type == '1'）：用用户 ID 作为 session
         conversation_type = incoming_message.conversation_type
         conversation_id = incoming_message.conversation_id
         is_group = (conversation_type == '2')
@@ -59,15 +68,25 @@ class MomentYYBotHandler(dingtalk_stream.ChatbotHandler):
         else:
             session_id = f"dingtalk-{user_id}"
 
-        # 获取发送人昵称
         sender_nick = incoming_message.sender_nick or user_id
 
         logger.info(f"收到消息 [{sender_nick}] ({'群聊' if is_group else '私聊'}): {text}")
 
+        # 同一 session 串行处理，避免历史记录竞态
+        async with self._session_locks[session_id]:
+            reply = await self._handle_message(
+                session_id, user_id, sender_nick, text, is_group
+            )
+
+        self.reply_markdown("MomentYY", reply, incoming_message)
+        return AckMessage.STATUS_OK, "OK"
+
+    async def _handle_message(
+        self, session_id: str, user_id: str, sender_nick: str, text: str, is_group: bool
+    ) -> str:
         try:
             history = load_history(session_id)
 
-            # 群聊消息带上发送人标识，让 Agent 知道是谁在说话
             user_msg = f"[{sender_nick}]: {text}" if is_group else text
             all_messages = history + [HumanMessage(content=user_msg)]
 
@@ -80,13 +99,17 @@ class MomentYYBotHandler(dingtalk_stream.ChatbotHandler):
                 "current_step": 0,
                 "reflect_count": 0,
             }
-            final_state = agent_app.invoke(initial_state)
+
+            # 在线程池中执行同步的 invoke，不阻塞事件循环
+            loop = asyncio.get_event_loop()
+            final_state = await loop.run_in_executor(
+                _executor, agent_app.invoke, initial_state
+            )
 
             # 提取回复
             reply = ""
             for msg in reversed(final_state["messages"]):
                 if hasattr(msg, "content") and msg.content:
-                    # 跳过用户消息
                     if hasattr(msg, "type") and msg.type == "human":
                         continue
                     if "<tool_call>" in msg.content or "<function=" in msg.content:
@@ -99,20 +122,17 @@ class MomentYYBotHandler(dingtalk_stream.ChatbotHandler):
             if not reply:
                 reply = "抱歉，我暂时无法回答这个问题。"
 
-            # 保存历史（群聊带发送人标识）
+            # 保存历史
             history.append(HumanMessage(content=user_msg))
             history.append(AIMessage(content=reply))
             save_history(session_id, history)
 
             logger.info(f"回复 [{user_id}]: {reply[:50]}...")
+            return reply
 
         except Exception as e:
             logger.error(f"处理消息出错: {e}")
-            reply = f"⚠️ 处理出错：{str(e)[:100]}"
-
-        # 发送最终回复
-        self.reply_markdown("MomentYY", reply, incoming_message)
-        return AckMessage.STATUS_OK, "OK"
+            return "我刚刚走神了，再说一次吧 🫠"
 
 
 def start_dingtalk_bot():
